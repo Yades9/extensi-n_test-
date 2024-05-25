@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 class NineManga : AnimeExtension() {
 
@@ -67,4 +68,28 @@ class NineManga : AnimeExtension() {
         val title: String,
         val url: String
     )
+
+    // ============================== Chapters ==============================
+    override fun chapterListSelector() = "ul.detail-chlist li"
+
+    override fun chapterFromElement(element: Element): SChapter {
+        val chapterUrl = element.select("a").attr("abs:href")
+        val chapterTitle = element.select("a").text()
+        return SChapter.create().apply {
+            setUrlWithoutDomain(chapterUrl)
+            name = chapterTitle
+        }
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(chapterListSelector()).map { chapterFromElement(it) }
+    }
 }
+
+private fun Response.asJsoup(): Document = this.asJsoup()
+
+data class AnimeChapter(
+    val title: String,
+    val url: String
+)
