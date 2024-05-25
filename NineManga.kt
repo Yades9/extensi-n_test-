@@ -1,20 +1,15 @@
-package eu.kanade.tachiyomi.animeextension.es.ninemanga
-
-import eu.kanade.tachiyomi.source.AnimeSource
+import eu.kanade.tachiyomi.animeextension.AnimeExtension
 import eu.kanade.tachiyomi.source.model.Anime
 import eu.kanade.tachiyomi.source.model.AnimesPage
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.asJsoup
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
-class NineManga : AnimeSource() {
+class NineManga : AnimeExtension() {
 
     override val name = "NineManga"
 
@@ -48,32 +43,28 @@ class NineManga : AnimeSource() {
         return AnimesPage(animes, hasNextPage)
     }
 
-    override fun searchAnimeRequest(page: Int, query: String): Request {
-        val url = "$baseUrl/search/?wd=$query&page=$page"
-        return GET(url, headers)
-    }
-
-    override fun searchAnimeParse(response: Response): AnimesPage {
+    override fun fetchAnimeDetails(anime: Anime): Anime {
+        val response = client.newCall(GET(anime.url, headers)).execute()
         val document = response.asJsoup()
-        val animes = mutableListOf<Anime>()
 
-        document.select("div.bookbox").forEach { element ->
-            val anime = Anime(
-                title = element.select("a.bookname").text(),
-                url = baseUrl + element.select("a.bookname").attr("href"),
-                thumbnailUrl = element.select("img.bookimg").attr("src"),
-                author = element.select("a.writer").text(),
-                genre = element.select("p.tag").joinToString(", ") { it.text() }
-            )
-            animes.add(anime)
+        val chapters = document.select("ul.detail-chlist li").map { chapterElement ->
+            val chapterUrl = baseUrl + chapterElement.select("a").attr("href")
+            val chapterTitle = chapterElement.select("a").text()
+            AnimeChapter(chapterTitle, chapterUrl)
         }
 
-        val hasNextPage = document.select("a.next").isNotEmpty()
-        return AnimesPage(animes, hasNextPage)
+        return anime.copy(chapters = chapters)
     }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder().apply {
         add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
         add("Referer", baseUrl)
     }
+
+    private fun Response.asJsoup(): Document = this.asJsoup()
+
+    data class AnimeChapter(
+        val title: String,
+        val url: String
+    )
 }
